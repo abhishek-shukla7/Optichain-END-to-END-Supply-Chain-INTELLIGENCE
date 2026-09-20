@@ -88,6 +88,15 @@ st.markdown("""
         padding: 8px;
     }
 
+    /* Make normal Streamlit text readable on light cards */
+    .stApp, .stApp p, .stApp li, .stApp label, .stApp [data-testid="stMarkdownContainer"] {
+        color: #111827;
+    }
+
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {
+        color: #111827;
+    }
+
     .footer {
         text-align: center;
         color: #6b1a1a;
@@ -246,14 +255,14 @@ if page == "Executive Overview":
     st.markdown('<div class="title-box">Supply Chain Management</div>', unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="background:white;padding:18px;border-radius:6px;">
+    <div style="background:white;padding:18px;border-radius:6px;color:#111827;">
         <h2 style="color:#a90000;margin-top:0;">What is Supply Chain?</h2>
-        <p>
+        <p style="color:#111827;">
         A supply chain is a network of companies and people involved in the
         production and delivery of a product or service, including suppliers,
         warehouses, transportation, distribution and customers.
         </p>
-        <p>
+        <p style="color:#111827;">
         This interactive portfolio dashboard analyzes order, sales, supplier,
         delivery and customer data using Python, SQL and BI techniques.
         </p>
