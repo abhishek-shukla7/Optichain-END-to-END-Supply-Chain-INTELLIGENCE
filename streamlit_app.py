@@ -1,117 +1,53 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import os
+import plotly.express as px
 
-# --------------------------------------------------
+# =========================
 # PAGE CONFIG
-# --------------------------------------------------
+# =========================
 
 st.set_page_config(
-    page_title="OptiChain | Supply Chain Intelligence",
+    page_title="OptiChain Supply Chain Intelligence",
     page_icon="📊",
     layout="wide"
 )
 
-# --------------------------------------------------
-# CUSTOM CSS
-# --------------------------------------------------
+# =========================
+# LOAD DATA
+# =========================
 
-st.markdown("""
-<style>
+DATA_PATH = "data/raw/Car_SupplyChainManagementDataSet.csv"
 
-.main-title {
-    font-size: 42px;
-    font-weight: 700;
-    margin-bottom: 0px;
-}
+try:
+    df = pd.read_csv(DATA_PATH)
+except Exception as e:
+    st.error(f"Unable to load dataset: {e}")
+    st.stop()
 
-.subtitle {
-    font-size: 18px;
-    color: #666;
-    margin-bottom: 30px;
-}
+# =========================
+# TITLE
+# =========================
 
-.metric-card {
-    padding: 20px;
-    border-radius: 12px;
-    background-color: #f5f5f5;
-    text-align: center;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# --------------------------------------------------
-# HEADER
-# --------------------------------------------------
+st.title("📊 OptiChain Supply Chain Intelligence")
 
 st.markdown(
-    '<div class="main-title">OptiChain Supply Chain Intelligence</div>',
-    unsafe_allow_html=True
-)
+    """
+    **End-to-End Supply Chain Analytics Dashboard**
 
-st.markdown(
-    '<div class="subtitle">End-to-End Supply Chain Analytics Dashboard | Python • SQL • Power BI</div>',
-    unsafe_allow_html=True
+    Python • SQL • Power BI • DAX
+    """
 )
 
 st.divider()
 
-# --------------------------------------------------
-# FIND DATA
-# --------------------------------------------------
-
-possible_files = [
-    "data/raw/Car_SupplyChainManagementDataSet.csv",
-    "data/raw/Car_SupplyChainManagementDataSet.xlsx",
-    "data/Car_SupplyChainManagementDataSet.csv"
-]
-
-data_file = None
-
-for file in possible_files:
-    if os.path.exists(file):
-        data_file = file
-        break
-
-if data_file is None:
-
-    st.warning(
-        "Dataset file was not found. Please check the repository data path."
-    )
-
-    st.info(
-        "The dashboard structure is ready. Add the dataset to the expected data folder."
-    )
-
-    st.stop()
-
-# --------------------------------------------------
-# LOAD DATA
-# --------------------------------------------------
-
-try:
-
-    if data_file.endswith(".csv"):
-        df = pd.read_csv(data_file)
-
-    else:
-        df = pd.read_excel(data_file)
-
-except Exception as e:
-
-    st.error(f"Unable to load dataset: {e}")
-    st.stop()
-
-# --------------------------------------------------
+# =========================
 # SIDEBAR
-# --------------------------------------------------
+# =========================
 
 st.sidebar.title("Dashboard Navigation")
 
 page = st.sidebar.radio(
-    "Select Section",
+    "Select Dashboard",
     [
         "Executive Overview",
         "Sales Performance",
@@ -121,42 +57,9 @@ page = st.sidebar.radio(
     ]
 )
 
-# --------------------------------------------------
-# FILTERS
-# --------------------------------------------------
-
-st.sidebar.markdown("### Filters")
-
-filtered_df = df.copy()
-
-# Detect categorical columns automatically
-
-categorical_columns = df.select_dtypes(
-    include=["object"]
-).columns.tolist()
-
-for column in categorical_columns[:3]:
-
-    values = sorted(
-        df[column].dropna().astype(str).unique().tolist()
-    )
-
-    if len(values) <= 100:
-
-        selected = st.sidebar.multiselect(
-            column,
-            values,
-            default=values
-        )
-
-        if selected:
-            filtered_df = filtered_df[
-                filtered_df[column].astype(str).isin(selected)
-            ]
-
-# --------------------------------------------------
+# =========================
 # EXECUTIVE OVERVIEW
-# --------------------------------------------------
+# =========================
 
 if page == "Executive Overview":
 
@@ -166,26 +69,46 @@ if page == "Executive Overview":
 
     col1.metric(
         "Total Records",
-        f"{len(filtered_df):,}"
+        f"{len(df):,}"
     )
 
-    # Try to identify revenue column
+    # Detect important columns
+    revenue_col = next(
+        (
+            c for c in df.columns
+            if any(
+                x in c.lower()
+                for x in [
+                    "sales",
+                    "revenue",
+                    "orderitemtotal",
+                    "sales amount"
+                ]
+            )
+        ),
+        None
+    )
 
-    revenue_column = None
+    supplier_col = next(
+        (
+            c for c in df.columns
+            if "supplier" in c.lower()
+        ),
+        None
+    )
 
-    for column in filtered_df.columns:
+    customer_col = next(
+        (
+            c for c in df.columns
+            if "customer" in c.lower()
+        ),
+        None
+    )
 
-        name = column.lower()
-
-        if "sales" in name or "revenue" in name or "orderitemtotal" in name:
-
-            revenue_column = column
-            break
-
-    if revenue_column:
+    if revenue_col:
 
         revenue = pd.to_numeric(
-            filtered_df[revenue_column],
+            df[revenue_col],
             errors="coerce"
         ).sum()
 
@@ -197,30 +120,15 @@ if page == "Executive Overview":
     else:
 
         col2.metric(
-            "Total Revenue",
+            "Revenue",
             "N/A"
         )
 
-    # Supplier count
-
-    supplier_column = None
-
-    for column in filtered_df.columns:
-
-        if "supplier" in column.lower():
-
-            supplier_column = column
-            break
-
-    if supplier_column:
-
-        suppliers = filtered_df[
-            supplier_column
-        ].nunique()
+    if supplier_col:
 
         col3.metric(
             "Suppliers",
-            f"{suppliers:,}"
+            f"{df[supplier_col].nunique():,}"
         )
 
     else:
@@ -230,26 +138,11 @@ if page == "Executive Overview":
             "N/A"
         )
 
-    # Customer count
-
-    customer_column = None
-
-    for column in filtered_df.columns:
-
-        if "customer" in column.lower():
-
-            customer_column = column
-            break
-
-    if customer_column:
-
-        customers = filtered_df[
-            customer_column
-        ].nunique()
+    if customer_col:
 
         col4.metric(
             "Customers",
-            f"{customers:,}"
+            f"{df[customer_col].nunique():,}"
         )
 
     else:
@@ -261,158 +154,242 @@ if page == "Executive Overview":
 
     st.divider()
 
+    # =========================
+    # DATA PREVIEW
+    # =========================
+
     st.subheader("Dataset Preview")
 
     st.dataframe(
-        filtered_df.head(20),
+        df.head(20),
         use_container_width=True
     )
 
-# --------------------------------------------------
+    # =========================
+    # NUMERIC SUMMARY
+    # =========================
+
+    st.subheader("Numerical Summary")
+
+    st.dataframe(
+        df.describe().T,
+        use_container_width=True
+    )
+
+
+# =========================
 # SALES PERFORMANCE
-# --------------------------------------------------
+# =========================
 
 elif page == "Sales Performance":
 
-    st.header("Sales Performance")
+    st.header("📈 Sales Performance")
 
-    st.subheader("Revenue / Sales Analysis")
-
-    numeric_columns = filtered_df.select_dtypes(
-        include=np.number
+    numeric_columns = df.select_dtypes(
+        include="number"
     ).columns.tolist()
 
     if numeric_columns:
 
-        selected_metric = st.selectbox(
-            "Select Metric",
+        selected_column = st.selectbox(
+            "Select Sales Metric",
             numeric_columns
         )
 
-        st.line_chart(
-            filtered_df[selected_metric]
+        fig = px.histogram(
+            df,
+            x=selected_column,
+            title=f"{selected_column} Distribution",
+            marginal="box"
         )
 
-        st.subheader("Distribution")
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
-        st.bar_chart(
-            filtered_df[selected_metric]
+        st.subheader("Top Values")
+
+        top_values = (
+            df[selected_column]
             .value_counts()
             .head(15)
+            .reset_index()
         )
 
-    else:
+        top_values.columns = [
+            selected_column,
+            "Count"
+        ]
 
-        st.info("No numeric columns were found.")
-
-# --------------------------------------------------
-# OPERATIONS
-# --------------------------------------------------
-
-elif page == "Operations & Delivery":
-
-    st.header("Operations & Delivery")
-
-    st.subheader("Shipping / Delivery Analysis")
-
-    shipping_columns = [
-        column for column in filtered_df.columns
-        if "ship" in column.lower()
-        or "delivery" in column.lower()
-    ]
-
-    if shipping_columns:
-
-        selected_column = st.selectbox(
-            "Select operational field",
-            shipping_columns
+        fig2 = px.bar(
+            top_values,
+            x=selected_column,
+            y="Count",
+            title=f"Top {selected_column} Values"
         )
 
-        st.dataframe(
-            filtered_df[selected_column]
-            .value_counts()
-            .reset_index(),
+        st.plotly_chart(
+            fig2,
             use_container_width=True
         )
 
     else:
 
         st.info(
-            "No shipping or delivery column was automatically detected."
+            "No numeric columns were detected."
         )
 
-# --------------------------------------------------
-# CUSTOMER 360
-# --------------------------------------------------
 
-elif page == "Customer 360":
+# =========================
+# OPERATIONS
+# =========================
 
-    st.header("Customer 360")
+elif page == "Operations & Delivery":
 
-    customer_columns = [
-        column for column in filtered_df.columns
-        if "customer" in column.lower()
+    st.header("🚚 Operations & Delivery")
+
+    operational_columns = [
+        c for c in df.columns
+        if any(
+            x in c.lower()
+            for x in [
+                "shipping",
+                "ship",
+                "delivery",
+                "order status",
+                "department"
+            ]
+        )
     ]
 
-    if customer_columns:
+    if operational_columns:
 
-        selected_customer = st.selectbox(
-            "Select Customer Field",
-            customer_columns
+        selected_column = st.selectbox(
+            "Select Operational Dimension",
+            operational_columns
         )
 
-        customer_summary = (
-            filtered_df[selected_customer]
+        counts = (
+            df[selected_column]
+            .astype(str)
             .value_counts()
             .head(20)
             .reset_index()
         )
 
-        st.dataframe(
-            customer_summary,
-            use_container_width=True
+        counts.columns = [
+            selected_column,
+            "Count"
+        ]
+
+        fig = px.bar(
+            counts,
+            x="Count",
+            y=selected_column,
+            orientation="h",
+            title=f"{selected_column} Analysis"
         )
 
-        st.bar_chart(
-            customer_summary.set_index(
-                selected_customer
-            )
+        st.plotly_chart(
+            fig,
+            use_container_width=True
         )
 
     else:
 
         st.info(
-            "Customer fields were not automatically detected."
+            "No operational fields were automatically detected."
         )
 
-# --------------------------------------------------
+
+# =========================
+# CUSTOMER 360
+# =========================
+
+elif page == "Customer 360":
+
+    st.header("👥 Customer 360")
+
+    customer_columns = [
+        c for c in df.columns
+        if "customer" in c.lower()
+    ]
+
+    if customer_columns:
+
+        selected_customer = st.selectbox(
+            "Customer Field",
+            customer_columns
+        )
+
+        customer_counts = (
+            df[selected_customer]
+            .astype(str)
+            .value_counts()
+            .head(20)
+            .reset_index()
+        )
+
+        customer_counts.columns = [
+            selected_customer,
+            "Orders"
+        ]
+
+        fig = px.bar(
+            customer_counts,
+            x="Orders",
+            y=selected_customer,
+            orientation="h",
+            title="Top Customers"
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+        st.dataframe(
+            customer_counts,
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "No customer column was detected."
+        )
+
+
+# =========================
 # DATA EXPLORER
-# --------------------------------------------------
+# =========================
 
 elif page == "Data Explorer":
 
-    st.header("Data Explorer")
+    st.header("🔎 Data Explorer")
 
     st.write(
-        f"Rows: **{filtered_df.shape[0]:,}**"
+        f"**Rows:** {df.shape[0]:,}"
     )
 
     st.write(
-        f"Columns: **{filtered_df.shape[1]:,}**"
+        f"**Columns:** {df.shape[1]:,}"
     )
 
     st.dataframe(
-        filtered_df,
+        df,
         use_container_width=True
     )
 
-# --------------------------------------------------
+
+# =========================
 # FOOTER
-# --------------------------------------------------
+# =========================
 
 st.divider()
 
 st.caption(
     "OptiChain Supply Chain Intelligence | "
-    "Python • SQL Server • Power BI • DAX"
+    "Developed by Abhishek Shukla"
 )
