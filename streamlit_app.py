@@ -517,63 +517,115 @@ elif page == "Customer 360":
 
         st.markdown("#### Customer / Product / Geography Breakdown")
 
-        # A Sankey-style flow to approximate the Power BI decomposition view.
+        # Robust Sankey-style flow to approximate the Power BI decomposition view.
+        # Important: product/state/customer names can be identical (or repeat), so
+        # we use unique internal node IDs instead of using the display names as keys.
         temp = filtered.copy()
-        temp["State"] = temp["State"].fillna("Unknown")
-        temp["CarModel"] = temp["CarModel"].fillna("Unknown")
-        temp["CustomerName"] = temp["CustomerName"].fillna("Unknown")
+        temp["State"] = temp["State"].fillna("Unknown").astype(str)
+        temp["CarModel"] = temp["CarModel"].fillna("Unknown").astype(str)
 
-        top_models = temp.groupby("CarModel")["Sales"].sum().nlargest(8).index
+        # Keep the visualization compact and fast.
+        top_models = (
+            temp.groupby("CarModel")["Sales"]
+            .sum()
+            .nlargest(8)
+            .index
+        )
         temp = temp[temp["CarModel"].isin(top_models)]
 
-        model_sales = temp.groupby("CarModel")["Sales"].sum().sort_values(ascending=False)
-        state_sales = temp.groupby("State")["Sales"].sum().nlargest(8)
-        customer_sales = temp.groupby("CustomerName")["Sales"].sum().nlargest(8)
+        if temp.empty:
+            st.info("No data is available for the selected filters.")
+        else:
+            model_sales = (
+                temp.groupby("CarModel")["Sales"]
+                .sum()
+                .sort_values(ascending=False)
+            )
 
-        labels = (
-            ["Total Sales"] +
-            model_sales.index.tolist() +
-            state_sales.index.tolist() +
-            customer_sales.index.tolist()
-        )
-        index = {name: i for i, name in enumerate(labels)}
+            # Build unique node IDs by category so names such as "GMC" or "Texas"
+            # can never collide with another category.
+            labels = ["Total Sales"]
+            node_ids = ["total"]
 
-        sources, targets, values = [], [], []
+            for model in model_sales.index:
+                node_ids.append(f"product::{model}")
+                labels.append(str(model))
 
-        for name, value in model_sales.items():
-            sources.append(index["Total Sales"])
-            targets.append(index[name])
-            values.append(float(value))
+            product_nodes = {
+                model: i
+                for i, model in enumerate(model_sales.index, start=1)
+            }
 
-        for model in model_sales.index:
-            subset = temp[temp["CarModel"] == model]
-            state = subset.groupby("State")["Sales"].sum().nlargest(3)
-            for name, value in state.items():
-                sources.append(index[model])
-                targets.append(index[name])
+            state_nodes = {}
+            next_idx = len(labels)
+
+            # Add only the top 8 states within the filtered/top-product data.
+            state_sales = (
+                temp.groupby("State")["Sales"]
+                .sum()
+                .nlargest(8)
+            )
+
+            for state in state_sales.index:
+                node_ids.append(f"state::{state}")
+                labels.append(str(state))
+                state_nodes[state] = next_idx
+                next_idx += 1
+
+            sources, targets, values = [], [], []
+
+            # Total Sales -> Product
+            for model, value in model_sales.items():
+                sources.append(0)
+                targets.append(product_nodes[model])
                 values.append(float(value))
 
-        fig = go.Figure(go.Sankey(
-            node=dict(
-                pad=15,
-                thickness=18,
-                line=dict(color="white", width=.5),
-                label=labels,
-            ),
-            link=dict(
-                source=sources,
-                target=targets,
-                value=values,
+            # Product -> Geography.
+            # Each product shows its top 3 states. Only states in the
+            # top-8 global geography set are displayed.
+            for model in model_sales.index:
+                subset = temp[temp["CarModel"] == model]
+                model_states = (
+                    subset.groupby("State")["Sales"]
+                    .sum()
+                    .nlargest(3)
+                )
+
+                for state, value in model_states.items():
+                    if state in state_nodes and value > 0:
+                        sources.append(product_nodes[model])
+                        targets.append(state_nodes[state])
+                        values.append(float(value))
+
+            fig = go.Figure(
+                go.Sankey(
+                    arrangement="snap",
+                    node=dict(
+                        pad=15,
+                        thickness=18,
+                        line=dict(color="white", width=.5),
+                        label=labels,
+                        customdata=node_ids,
+                        hovertemplate="%{label}<br>Sales: $%{value:,.0f}<extra></extra>",
+                    ),
+                    link=dict(
+                        source=sources,
+                        target=targets,
+                        value=values,
+                        hovertemplate="$%{value:,.0f}<extra></extra>",
+                    ),
+                )
             )
-        ))
-        fig.update_layout(
-            height=520,
-            title="Sales Decomposition: Product → Geography",
-            paper_bgcolor="#a90000",
-            font=dict(color="white"),
-            margin=dict(l=10, r=10, t=60, b=10)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+
+            fig.update_layout(
+                height=520,
+                title="Sales Decomposition: Product → Geography",
+                paper_bgcolor="#a90000",
+                plot_bgcolor="#a90000",
+                font=dict(color="white"),
+                margin=dict(l=10, r=10, t=60, b=10),
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 # ---------- Footer ----------
 st.markdown(
